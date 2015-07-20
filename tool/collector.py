@@ -300,11 +300,6 @@ class Collector:
             for l in get_stack_usage_lines(su_dir):
                 self.parse_stack_usage_line(l)
 
-    def parse_pebble_project_dir(self, project_dir):
-        elf_file = os.path.join(project_dir, 'build', 'pebble-app.elf')
-        su_dir = os.path.join(project_dir, "build", "src")
-        self.parse(elf_file, su_dir)
-
     def sorted_by_size(self, symbols):
         return sorted(symbols, key=lambda k: k.get("size", 0), reverse=True)
 

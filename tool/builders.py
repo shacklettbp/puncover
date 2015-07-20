@@ -53,7 +53,8 @@ class PebbleProjectBuilder(Builder):
         self.store_file_time(self.elf_path(), store_empty=True)
 
     def elf_path(self):
-        return os.path.join(self.project_dir, 'build', 'pebble-app.elf')
+        # Default to basalt version of app
+        return os.path.join(self.project_dir, 'build', 'basalt', 'pebble-app.elf')
 
     def su_dir(self):
         return os.path.join(self.project_dir, "build", "src")

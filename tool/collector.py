@@ -136,8 +136,8 @@ class Collector:
         self.symbols[int_address] = sym
         return sym
 
-    # 00000550 00000034 T main	/Users/behrens/Documents/projects/pebble/puncover/puncover/build/../src/puncover.c:25
-    parse_size_line_re = re.compile(r"^([\da-f]{8})\s+([\da-f]{8})\s+(.)\s+(\w+)(\s+([^:]+):(\d+))?")
+    # main     |00000550|   T  |    FUNC |00000034|     |  .text   /Users/behrens/Documents/projects/pebble/puncover/puncover/build/../src/puncover.c:25
+    parse_size_line_re = re.compile(r"^(\S+)\s*\|([\da-f]{8})\|\s+(.)\s+\|\s+(\w+)\|([\da-f]{8})\|[^|]+\|\.\w+(?:\s+([^:]+):(\d+))?")
 
     def parse_size_line(self, line):
         # print(line)
@@ -145,18 +145,17 @@ class Collector:
         if not match:
             return False
 
-        addr = match.group(1)
-        size = int(match.group(2), 16)
-        type = match.group(3)
-        name = match.group(4)
-        if match.group(5):
-            file = match.group(6)
+        name = match.group(1)
+        addr = match.group(2)
+        section = match.group(3)
+        type = match.group(4)
+        size = int(match.group(5), 16)
+        file = match.group(6)
+        if match.group(7):
             line = int(match.group(7))
-        else:
-            file = None
-            line = None
 
-        types = {"T": TYPE_FUNCTION, "D": TYPE_VARIABLE, "B": TYPE_VARIABLE, "R": TYPE_VARIABLE}
+
+        types = {"FUNC": TYPE_FUNCTION, "OBJECT": TYPE_VARIABLE}
 
         self.add_symbol(name, address=addr, size=size, file=file, line=line, type = types.get(type.upper(), None))
 
@@ -258,14 +257,13 @@ class Collector:
             return path
 
         def get_assembly_lines(elf_file):
-            proc = subprocess.Popen([arm_tool('arm-none-eabi-objdump'),'-dslw', os.path.basename(elf_file)], stdout=subprocess.PIPE, cwd=os.path.dirname(elf_file))
-            # proc = subprocess.Popen([in_pebble_sdk('arm-none-eabi-objdump'),'-d', os.path.basename(elf_file)], stdout=subprocess.PIPE, cwd=os.path.dirname(elf_file))
+            proc = subprocess.Popen([arm_tool('arm-none-eabi-objdump'),'-dlw', os.path.basename(elf_file)], stdout=subprocess.PIPE, cwd=os.path.dirname(elf_file))
             return proc.stdout.readlines()
 
 
         def get_size_lines(elf_file):
             # http://linux.die.net/man/1/nm
-            proc = subprocess.Popen([arm_tool('arm-none-eabi-nm'),'-Sl', os.path.basename(elf_file)], stdout=subprocess.PIPE, cwd=os.path.dirname(elf_file))
+            proc = subprocess.Popen([arm_tool('arm-none-eabi-nm'),'-Slfs', os.path.basename(elf_file)], stdout=subprocess.PIPE, cwd=os.path.dirname(elf_file))
             return proc.stdout.readlines()
 
 
@@ -320,7 +318,7 @@ class Collector:
         return list([f for f in self.all_symbols() if f.get(TYPE, None) == TYPE_VARIABLE])
 
     def enhance_assembly(self):
-        for key, symbol in self.symbols.items():
+        for symbol in self.all_functions():
             if symbol.has_key(ASM):
                 symbol[ASM] = list([self.enhanced_assembly_line(l) for l in symbol[ASM]])
 
@@ -402,9 +400,10 @@ class Collector:
         return 0
 
     def enhance_function_size_from_assembly(self):
-        for f in self.all_symbols():
+        for f in self.all_functions():
             if f.has_key(ASM):
-                f[SIZE] = sum([self.count_assembly_code_bytes(l) for l in f[ASM]])
+                if not f.has_key(SIZE) or f[SIZE] == 0:
+                    f[SIZE] = sum([self.count_assembly_code_bytes(l) for l in f[ASM]])
 
     def enhance_sibling_symbols(self):
         for f in self.all_functions():

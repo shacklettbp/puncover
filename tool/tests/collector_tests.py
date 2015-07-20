@@ -14,23 +14,21 @@ class TestCollector(unittest.TestCase):
 
     def test_parses_function_line(self):
         c = Collector()
-        line = "00000550 00000034 T main	/Users/behrens/Documents/projects/pebble/puncover/puncover/build/../src/puncover.c:25"
+        line = "main  |00000550|   T   |      FUNC|00000034|    |.text  	/Users/behrens/Documents/projects/pebble/puncover/puncover/build/../src/puncover.c:25"
         self.assertTrue(c.parse_size_line(line))
         self.assertDictEqual(c.symbols, {0x00000550: {'name': 'main', 'base_file': 'puncover.c', 'path': '/Users/behrens/Documents/projects/pebble/puncover/puncover/build/../src/puncover.c', 'address': '00000550', 'line': 25, 'size': 52, 'type': 'function'}})
 
     def test_parses_variable_line_from_initialized_data_section(self):
         c = Collector()
-        line = "00000968 000000c8 D foo	/Users/behrens/Documents/projects/pebble/puncover/pebble/build/puncover.c:15"
+        line = "foo   |00000968|   D   |      OBJECT|000000c8|    |.data  	/Users/behrens/Documents/projects/pebble/puncover/puncover/build/puncover.c:15"
         self.assertTrue(c.parse_size_line(line))
-        self.assertDictEqual(c.symbols, {0x00000968: {'name': 'foo', 'base_file': 'puncover.c', 'path': '/Users/behrens/Documents/projects/pebble/puncover/pebble/build/puncover.c', 'address': '00000968', 'line': 15, 'size': 200, 'type': 'variable'}})
+        self.assertDictEqual(c.symbols, {0x00000968: {'name': 'foo', 'base_file': 'puncover.c', 'path': '/Users/behrens/Documents/projects/pebble/puncover/puncover/build/puncover.c', 'address': '00000968', 'line': 15, 'size': 200, 'type': 'variable'}})
 
     def test_parses_variable_line_from_uninitialized_data_section(self):
         c = Collector()
-        line = "00000a38 00000008 b some_double_value	/Users/behrens/Documents/projects/pebble/puncover/pebble/build/../src/puncover.c:17"
+        line = "some_double_value   |00000a38|   b   |      OBJECT|00000008|    |.bss  	/Users/behrens/Documents/projects/pebble/puncover/puncover/build/puncover.c:17"
         self.assertTrue(c.parse_size_line(line))
-        self.assertDictEqual(c.symbols, {0x00000a38: {'name': 'some_double_value', 'base_file': 'puncover.c', 'path': '/Users/behrens/Documents/projects/pebble/puncover/pebble/build/../src/puncover.c', 'address': '00000a38', 'line': 17, 'size': 8, 'type': 'variable'}})
-
-
+        self.assertDictEqual(c.symbols, {0x00000a38: {'name': 'some_double_value', 'base_file': 'puncover.c', 'path': '/Users/behrens/Documents/projects/pebble/puncover/puncover/build/puncover.c', 'address': '00000a38', 'line': 17, 'size': 8, 'type': 'variable'}})
 
     def test_ignores_incomplete_size_line_1(self):
         c = Collector()
@@ -218,10 +216,26 @@ $t():
         self.assertEqual(4, c.count_assembly_code_bytes(" 88a:	ebad 0d03 	sub.w	sp, sp, r3"))
         self.assertEqual(4, c.count_assembly_code_bytes("878:	000001ba 	.word	0x000001ba"))
 
+    def test_const_global_size(self):
+        c = Collector()
+        line = "tbl  |00000002|   T   |    OBJECT|00000034|    |.text  	/Users/behrens/Documents/projects/pebble/puncover/puncover/build/../src/puncover.c:25"
+        c.parse_size_line(line)
+        c.symbol_by_addr("00000002")[collector.ASM] = """
+00000002 <tbl>:
+  00000002:     00000001 00000001 00000002 00000003
+  ...
+  0000002c:     00000001 00000001 00000002 00000003
+         """.split("\n")
+         
+        c.enhance_function_size_from_assembly()
+        s = c.symbol_by_addr("00000002")
+        self.assertEqual(52, s[collector.SIZE])
+
     def test_enhance_function_size_from_assembly(self):
         c = Collector()
         c.symbols = { int("0000009c", 16) : {
             collector.ADDRESS: "0000009c",
+            collector.TYPE: collector.TYPE_FUNCTION,
             collector.ASM: """
 $t():
   9c:	f081 4100 	eor.w	r1, r1, #2147483648	; 0x80000000
@@ -315,8 +329,6 @@ uses_doubles2():
         folder = file[collector.FOLDER]
         self.assertEqual("<unknown>", file[collector.NAME])
 
-
-
     def test_enhance_file_elements(self):
         c = Collector()
         aa_c = c.file_for_path("a/a/aa.c")
@@ -379,4 +391,3 @@ uses_doubles2():
         self.assertItemsEqual([baa], b[collector.COLLAPSED_SUB_FOLDERS])
         self.assertItemsEqual([baa], ba[collector.COLLAPSED_SUB_FOLDERS])
         self.assertItemsEqual([], baa[collector.COLLAPSED_SUB_FOLDERS])
-
